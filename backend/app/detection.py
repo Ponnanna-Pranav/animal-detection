@@ -20,6 +20,7 @@ print(f"[INFO] Loading YOLO model from: {MODEL_PATH}")
 
 # Load model once globally
 model = YOLO(str(MODEL_PATH))
+model.fuse()
 
 print("[INFO] Model loaded successfully")
 
