@@ -42,13 +42,16 @@ function App() {
 
 
   const handleFileChange = (e) => {
-
     const selected = e.target.files[0];
-
-    setFile(selected || null);
+  
+    if (!selected) return;
+  
+    setFile(selected);
     setResult(null);
     setErrorMsg("");
-
+  
+    const url = URL.createObjectURL(selected);
+    setPreviewUrl(url);
   };
 
 
@@ -369,7 +372,6 @@ function App() {
       <br/><br/>
 
       {/* VIDEO */}
-
       <video
         ref={videoRef}
         autoPlay
@@ -378,18 +380,29 @@ function App() {
         width="400"
         style={{ border: "2px solid white" }}
       />
-
-      <canvas ref={canvasRef} style={{ display: "none" }} />
-
-
+      
+      {/* IMAGE PREVIEW */}
+      {previewUrl && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Uploaded Image</h3>
+          <img
+            src={previewUrl}
+            alt="Preview"
+            width="400"
+            style={{
+              border: "2px solid white",
+              borderRadius: "8px"
+            }}
+          />
+        </div>
+      )}
+      
       {/* RESULT */}
-
-      {loading && <p>Detecting...</p>}
-
-      {errorMsg && <p>{errorMsg}</p>}
-
       {result && (
-        <pre>{JSON.stringify(result, null, 2)}</pre>
+        <div>
+          <h3>Result</h3>
+          <pre>{JSON.stringify(result, null, 2)}</pre>
+        </div>
       )}
 
 
