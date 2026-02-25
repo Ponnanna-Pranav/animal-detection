@@ -2,38 +2,60 @@ import { useState, useEffect, useRef } from "react";
 
 const BACKEND_URL = "https://animal-detection-lx9k.onrender.com";
 
-function App() {
+export default function App() {
+
+  //////////////////////////////////////////////////////
+  // STATE
+  //////////////////////////////////////////////////////
 
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+
   const [result, setResult] = useState(null);
+
   const [loading, setLoading] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState("");
+
   const [history, setHistory] = useState([]);
+
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Live CCTV state
+  const [cameraOn, setCameraOn] = useState(false);
+
   const [liveMode, setLiveMode] = useState(false);
 
-  // Refs
+
+  //////////////////////////////////////////////////////
+  // REFS
+  //////////////////////////////////////////////////////
+
   const videoRef = useRef(null);
+
   const canvasRef = useRef(null);
+
   const streamRef = useRef(null);
+
   const intervalRef = useRef(null);
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // IMAGE PREVIEW
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   useEffect(() => {
 
     if (!file) {
+
       setPreviewUrl(null);
+
       return;
+
     }
 
     const url = URL.createObjectURL(file);
+
     setPreviewUrl(url);
 
     return () => URL.revokeObjectURL(url);
@@ -41,48 +63,65 @@ function App() {
   }, [file]);
 
 
+
+  //////////////////////////////////////////////////////
+  // FILE SELECT
+  //////////////////////////////////////////////////////
+
   const handleFileChange = (e) => {
+
     const selected = e.target.files[0];
-  
+
     if (!selected) return;
-  
+
     setFile(selected);
+
     setResult(null);
+
     setErrorMsg("");
-  
-    const url = URL.createObjectURL(selected);
-    setPreviewUrl(url);
+
   };
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // START CAMERA
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   const startCamera = async () => {
 
     try {
 
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      stopCamera();
 
       const stream = await navigator.mediaDevices.getUserMedia({
+
         video: true,
+
         audio: false
+
       });
 
       streamRef.current = stream;
 
-      videoRef.current.srcObject = stream;
+      if (videoRef.current) {
 
-      await videoRef.current.play();
+        videoRef.current.srcObject = stream;
+
+        await videoRef.current.play();
+
+      }
+
+      setCameraOn(true);
 
       console.log("Camera started");
 
-    } catch (error) {
+    }
+
+    catch (error) {
 
       console.error(error);
+
       alert("Camera failed: " + error.message);
 
     }
@@ -90,18 +129,49 @@ function App() {
   };
 
 
-  // =====================================================
-  // CAPTURE FRAME AND SEND TO BACKEND
-  // =====================================================
 
-  const captureFrame = async () => {
+  //////////////////////////////////////////////////////
+  // STOP CAMERA
+  //////////////////////////////////////////////////////
 
-    if (!videoRef.current) return null;
+  const stopCamera = () => {
+
+    if (streamRef.current) {
+
+      streamRef.current.getTracks().forEach(track => track.stop());
+
+      streamRef.current = null;
+
+    }
+
+    if (videoRef.current)
+
+      videoRef.current.srcObject = null;
+
+    stopLiveMode();
+
+    setCameraOn(false);
+
+    console.log("Camera stopped");
+
+  };
+
+
+
+  //////////////////////////////////////////////////////
+  // CAPTURE FRAME
+  //////////////////////////////////////////////////////
+
+  const captureFrame = () => {
 
     const video = videoRef.current;
+
     const canvas = canvasRef.current;
 
+    if (!video || video.videoWidth === 0) return null;
+
     canvas.width = video.videoWidth;
+
     canvas.height = video.videoHeight;
 
     const ctx = canvas.getContext("2d");
@@ -113,155 +183,182 @@ function App() {
   };
 
 
-  // =====================================================
-  // DETECT FROM CAMERA (MANUAL)
-  // =====================================================
 
-  const captureFromCamera = async () => {
+  //////////////////////////////////////////////////////
+  // SEND BASE64 TO BACKEND
+  //////////////////////////////////////////////////////
 
-    setLoading(true);
-    setErrorMsg("");
+  const detectBase64 = async (base64) => {
 
     try {
 
-      const base64 = await captureFrame();
-
       const response = await fetch(
+
         `${BACKEND_URL}/predict-base64`,
+
         {
+
           method: "POST",
+
           headers: {
+
             "Content-Type": "application/json"
+
           },
+
           body: JSON.stringify({ image: base64 })
+
         }
+
       );
+
+      if (!response.ok)
+
+        throw new Error("Backend error");
 
       const data = await response.json();
 
       setResult(data);
 
-      fetchHistory();
+    }
 
-    } catch {
+    catch (error) {
 
-      setErrorMsg("Camera detection failed");
+      console.error(error);
+
+      setErrorMsg("Detection failed");
 
     }
+
+  };
+
+
+
+  //////////////////////////////////////////////////////
+  // CAPTURE & DETECT
+  //////////////////////////////////////////////////////
+
+  const captureFromCamera = async () => {
+
+    const base64 = captureFrame();
+
+    if (!base64) return;
+
+    setLoading(true);
+
+    await detectBase64(base64);
+
+    await fetchHistory();
 
     setLoading(false);
 
   };
 
 
-  // =====================================================
-  // LIVE CCTV DETECTION LOOP
-  // =====================================================
+
+  //////////////////////////////////////////////////////
+  // LIVE DETECTION LOOP
+  //////////////////////////////////////////////////////
 
   const runLiveDetection = async () => {
 
-    try {
+    const base64 = captureFrame();
 
-      const base64 = await captureFrame();
+    if (!base64) return;
 
-      if (!base64) return;
-
-      const response = await fetch(
-        `${BACKEND_URL}/predict-base64`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ image: base64 })
-        }
-      );
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-
-      setResult(data);
-
-      fetchHistory();
-
-    } catch (err) {
-
-      console.error("Live detection error:", err);
-
-    }
+    await detectBase64(base64);
 
   };
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // START LIVE MODE
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   const startLiveMode = async () => {
 
+    if (liveMode) return;
+
     await startCamera();
 
-    setLiveMode(true);
+    intervalRef.current = setInterval(
 
-    intervalRef.current = setInterval(runLiveDetection, 2000);
+      runLiveDetection,
+
+      2000
+
+    );
+
+    setLiveMode(true);
 
     console.log("Live CCTV started");
 
   };
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // STOP LIVE MODE
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   const stopLiveMode = () => {
 
-    setLiveMode(false);
-
     if (intervalRef.current) {
+
       clearInterval(intervalRef.current);
+
+      intervalRef.current = null;
+
     }
+
+    setLiveMode(false);
 
     console.log("Live CCTV stopped");
 
   };
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // FILE DETECT
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   const handleDetect = async () => {
 
-    if (!file) {
-      alert("Select image first");
-      return;
-    }
+    if (!file) return;
 
     setLoading(true);
-    setErrorMsg("");
 
     const formData = new FormData();
+
     formData.append("file", file);
 
     try {
 
       const response = await fetch(
+
         `${BACKEND_URL}/predict`,
+
         {
+
           method: "POST",
+
           body: formData
+
         }
+
       );
 
       const data = await response.json();
 
       setResult(data);
 
-      fetchHistory();
+      await fetchHistory();
 
-    } catch {
+    }
+
+    catch {
 
       setErrorMsg("Detection failed");
 
@@ -272,25 +369,35 @@ function App() {
   };
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // FETCH HISTORY
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   const fetchHistory = async () => {
 
-    setHistoryLoading(true);
-
     try {
 
-      const res = await fetch(`${BACKEND_URL}/detections`);
+      setHistoryLoading(true);
+
+      const res = await fetch(
+
+        `${BACKEND_URL}/detections`
+
+      );
+
       const data = await res.json();
+
       setHistory(data);
 
-    } catch {}
+    }
+
+    catch {}
 
     setHistoryLoading(false);
 
   };
+
 
 
   useEffect(() => {
@@ -300,129 +407,289 @@ function App() {
   }, []);
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // CLEANUP
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   useEffect(() => {
 
     return () => {
 
-      if (intervalRef.current)
-        clearInterval(intervalRef.current);
+      stopCamera();
 
-      if (streamRef.current)
-        streamRef.current.getTracks().forEach(track => track.stop());
+      stopLiveMode();
 
     };
 
   }, []);
 
 
-  // =====================================================
+
+  //////////////////////////////////////////////////////
   // UI
-  // =====================================================
+  //////////////////////////////////////////////////////
 
   return (
 
     <div style={{
+
       minHeight: "100vh",
+
       background: "#111827",
+
       color: "white",
-      padding: "40px"
+
+      padding: "40px",
+
+      fontFamily: "Arial"
+
     }}>
+
+
 
       <h1>Animal Intrusion Detection System</h1>
 
 
-      {/* FILE DETECTION */}
 
-      <input type="file" accept="image/*" onChange={handleFileChange} />
+      {/* FILE INPUT */}
+
+      <input
+
+        type="file"
+
+        accept="image/*"
+
+        onChange={handleFileChange}
+
+      />
+
+
 
       <br/><br/>
 
+
+
       <button onClick={handleDetect}>
+
         Detect from File
+
       </button>
+
+
+
+      <br/><br/>
+
 
 
       {/* CAMERA CONTROLS */}
 
-      <br/><br/>
+      <button
 
-      <button onClick={startCamera}>
+        onClick={startCamera}
+
+        disabled={cameraOn}
+
+      >
+
         Start Camera
+
       </button>
 
-      <button onClick={captureFromCamera}>
+
+
+      <button
+
+        onClick={stopCamera}
+
+        disabled={!cameraOn}
+
+      >
+
+        Stop Camera
+
+      </button>
+
+
+
+      <button
+
+        onClick={captureFromCamera}
+
+        disabled={!cameraOn}
+
+      >
+
         Capture & Detect
+
       </button>
+
+
 
       <br/><br/>
 
-      <button onClick={startLiveMode} disabled={liveMode}>
+
+
+      {/* LIVE MODE */}
+
+      <button
+
+        onClick={startLiveMode}
+
+        disabled={liveMode}
+
+      >
+
         Start Live CCTV
+
       </button>
 
-      <button onClick={stopLiveMode} disabled={!liveMode}>
+
+
+      <button
+
+        onClick={stopLiveMode}
+
+        disabled={!liveMode}
+
+      >
+
         Stop Live CCTV
+
       </button>
+
 
 
       <br/><br/>
+
+
 
       {/* VIDEO */}
+
       <video
+
         ref={videoRef}
+
         autoPlay
+
         playsInline
+
         muted
+
         width="400"
-        style={{ border: "2px solid white" }}
+
+        style={{
+
+          border: "2px solid white",
+
+          borderRadius: "8px"
+
+        }}
+
       />
-      
+
+
+
+      <canvas
+
+        ref={canvasRef}
+
+        style={{ display: "none" }}
+
+      />
+
+
+
       {/* IMAGE PREVIEW */}
+
       {previewUrl && (
-        <div style={{ marginTop: "20px" }}>
+
+        <>
+
           <h3>Uploaded Image</h3>
+
           <img
+
             src={previewUrl}
-            alt="Preview"
+
             width="400"
-            style={{
-              border: "2px solid white",
-              borderRadius: "8px"
-            }}
+
+            style={{ borderRadius: "8px" }}
+
           />
-        </div>
+
+        </>
+
       )}
-      
+
+
+
+      {/* LOADING */}
+
+      {loading && <p>Detecting...</p>}
+
+
+
+      {/* ERROR */}
+
+      {errorMsg && (
+
+        <p style={{ color: "red" }}>
+
+          {errorMsg}
+
+        </p>
+
+      )}
+
+
+
       {/* RESULT */}
+
       {result && (
-        <div>
+
+        <>
+
           <h3>Result</h3>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
-        </div>
+
+          <pre>
+
+            {JSON.stringify(result, null, 2)}
+
+          </pre>
+
+        </>
+
       )}
+
 
 
       {/* HISTORY */}
 
       <h3>History</h3>
 
+
+
       {historyLoading
+
         ? "Loading..."
+
         : history.map(h => (
+
             <div key={h.id}>
+
               {h.animal} — {(h.confidence * 100).toFixed(1)}%
+
             </div>
+
           ))
+
       }
+
+
 
     </div>
 
   );
 
 }
-
-export default App;
