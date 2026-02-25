@@ -91,41 +91,40 @@ export default function App() {
   const startCamera = async () => {
 
     try {
-
+  
       stopCamera();
-
+  
       const stream = await navigator.mediaDevices.getUserMedia({
-
         video: true,
-
         audio: false
-
       });
-
+  
       streamRef.current = stream;
-
-      if (videoRef.current) {
-
-        videoRef.current.srcObject = stream;
-
-        await videoRef.current.play();
-
-      }
-
+  
+      const video = videoRef.current;
+  
+      video.srcObject = stream;
+  
+      // IMPORTANT FIX
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          video.play();
+          resolve();
+        };
+      });
+  
       setCameraOn(true);
-
-      console.log("Camera started");
-
-    }
-
-    catch (error) {
-
+  
+      console.log("Camera ready");
+  
+    } catch (error) {
+  
       console.error(error);
-
+  
       alert("Camera failed: " + error.message);
-
+  
     }
-
+  
   };
 
 
@@ -165,21 +164,22 @@ export default function App() {
   const captureFrame = () => {
 
     const video = videoRef.current;
-
     const canvas = canvasRef.current;
-
-    if (!video || video.videoWidth === 0) return null;
-
+  
+    if (!video || video.readyState !== 4) {
+      console.log("Video not ready");
+      return null;
+    }
+  
     canvas.width = video.videoWidth;
-
     canvas.height = video.videoHeight;
-
+  
     const ctx = canvas.getContext("2d");
-
+  
     ctx.drawImage(video, 0, 0);
-
+  
     return canvas.toDataURL("image/jpeg");
-
+  
   };
 
 
@@ -279,21 +279,22 @@ export default function App() {
   const startLiveMode = async () => {
 
     if (liveMode) return;
-
+  
     await startCamera();
-
-    intervalRef.current = setInterval(
-
-      runLiveDetection,
-
-      2000
-
-    );
-
+  
     setLiveMode(true);
-
-    console.log("Live CCTV started");
-
+  
+    // WAIT before first detection
+    setTimeout(() => {
+  
+      intervalRef.current = setInterval(() => {
+  
+        runLiveDetection();
+  
+      }, 2000);
+  
+    }, 1000);
+  
   };
 
 
