@@ -260,7 +260,8 @@ async def predict_animal(
 
         send_telegram_alert(
             top_dangerous["animal"],
-            top_dangerous["confidence"]
+            top_dangerous["confidence"],
+            str(saved_path)
         )
 
 
@@ -325,7 +326,7 @@ async def predict_base64(
         confidence = float(det.get("confidence",0))
     
         if any(danger in animal for danger in DANGEROUS_ANIMALS) and confidence >= 0.5:
-            send_telegram_alert(animal, confidence)
+            send_telegram_alert(animal, confidence, str(saved_path))
             break
 
 
