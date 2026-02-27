@@ -15,6 +15,7 @@ from .detection import run_inference_on_image_bytes
 from .database import Base, engine, SessionLocal
 from .models_db import Detection as DetectionModel
 from .schemas import DetectionOut
+from app.services.telegram import send_telegram_alert
 
 
 # =========================================================
@@ -257,12 +258,9 @@ async def predict_animal(
 
     if dangerous_found and top_dangerous:
 
-        send_whatsapp_alert(
-
+        send_telegram_alert(
             top_dangerous["animal"],
-            top_dangerous["confidence"],
-            saved_path
-
+            top_dangerous["confidence"]
         )
 
 
@@ -320,6 +318,15 @@ async def predict_base64(
 
 
     detections = run_inference_on_image_bytes(image_bytes)
+
+    for det in detections:
+
+        animal = det.get("class_name","").lower()
+        confidence = float(det.get("confidence",0))
+    
+        if animal in DANGEROUS_ANIMALS and confidence >= 0.5:
+            send_telegram_alert(animal, confidence)
+            break
 
 
     for det in detections:
