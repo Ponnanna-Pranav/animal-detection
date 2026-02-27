@@ -324,7 +324,7 @@ async def predict_base64(
         animal = det.get("class_name","").lower()
         confidence = float(det.get("confidence",0))
     
-        if animal in DANGEROUS_ANIMALS and confidence >= 0.5:
+        if any(danger in animal for danger in DANGEROUS_ANIMALS) and confidence >= 0.5:
             send_telegram_alert(animal, confidence)
             break
 
