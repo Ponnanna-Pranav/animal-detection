@@ -239,7 +239,7 @@ async def predict_animal(
         db.add(db_record)
 
 
-        if animal in DANGEROUS_ANIMALS and confidence >= 0.5:
+        if any(danger in animal for danger in DANGEROUS_ANIMALS) and confidence >= 0.5:
 
             dangerous_found = True
 
