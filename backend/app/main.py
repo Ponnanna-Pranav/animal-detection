@@ -58,12 +58,17 @@ if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
 # =========================================================
 
 DANGEROUS_ANIMALS = {
-    "tiger",
-    "lion",
-    "leopard",
     "bear",
-    "wolf",
+    "brown bear",
+    "cheetah",
     "elephant",
+    "fox",
+    "giraffe",
+    "jaguar",
+    "lion",
+    "lynx",
+    "rhinoceros",
+    "tiger",
 }
 
 
